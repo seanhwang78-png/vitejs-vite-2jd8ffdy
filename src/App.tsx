@@ -33,7 +33,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [tab, setTab] = useState<"search" | "dashboard">("search");
+  const [tab, setTab] = useState<"search" | "dashboard" | "products">("search");
 
   const loadSheet = async () => {
     setLoading(true);
@@ -116,7 +116,16 @@ export default function App() {
     ));
   }, [query, data]);
 
-  // 오늘 수령 대기 현황 통계
+  const productMap: Record<string, { member: Member; order: Order }[]> = {};
+  for (const member of data) {
+    for (const order of member.주문) {
+      if (order.상태 === "미수령") {
+        if (!productMap[order.제품명]) productMap[order.제품명] = [];
+        productMap[order.제품명].push({ member, order });
+      }
+    }
+  }
+
   const todayStr = new Date().toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
   const totalMembers = data.length;
   const 수령완료수 = data.filter(m => m.주문.some(o => o.상태 === "수령완료")).length;
@@ -144,7 +153,6 @@ export default function App() {
 
   return (
     <div style={s.wrap}>
-      {/* 헤더 */}
       <div style={{ width: "100%", maxWidth: 480, textAlign: "center", padding: "40px 0 16px" }}>
         <h1 style={{ color: "#f1f5f9", fontSize: 28, fontWeight: 800, margin: 0 }}>🛍️ 공동구매 픽업 확인</h1>
         <p style={{ color: "#64748b", fontSize: 13, marginTop: 8 }}>
@@ -152,7 +160,6 @@ export default function App() {
             ? `✅ 연동됨 · ${totalMembers}명 · ${lastUpdated?.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준`
             : "시트 연동 필요"}
         </p>
-        {/* 새로고침 버튼 */}
         {connected && (
           <button onClick={loadSheet} disabled={loading} style={{
             marginTop: 8, background: "rgba(99,102,241,0.2)", border: "1px solid rgba(99,102,241,0.4)",
@@ -163,22 +170,20 @@ export default function App() {
         )}
       </div>
 
-      {/* 탭 */}
       {connected && (
         <div style={{ width: "100%", maxWidth: 480, display: "flex", gap: 8, marginBottom: 16 }}>
-          {(["search", "dashboard"] as const).map(t => (
+          {(["search", "dashboard", "products"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
-              flex: 1, padding: "12px", borderRadius: 14, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14,
+              flex: 1, padding: "10px 4px", borderRadius: 14, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12,
               background: tab === t ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "rgba(255,255,255,0.05)",
               color: tab === t ? "#fff" : "#64748b",
             }}>
-              {t === "search" ? "🔍 회원 검색" : "📊 현황 대시보드"}
+              {t === "search" ? "🔍 회원검색" : t === "dashboard" ? "📊 현황" : "📦 상품별"}
             </button>
           ))}
         </div>
       )}
 
-      {/* 연동 버튼 */}
       {!connected && (
         <div style={s.card}>
           <p style={{ color: "#94a3b8", fontSize: 13, margin: "0 0 12px" }}>구글 시트가 자동으로 연동돼요</p>
@@ -189,7 +194,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 검색 탭 */}
       {connected && tab === "search" && (
         <>
           {!result ? (
@@ -253,12 +257,9 @@ export default function App() {
         </>
       )}
 
-      {/* 대시보드 탭 */}
       {connected && tab === "dashboard" && (
         <div style={{ width: "100%", maxWidth: 480 }}>
           <p style={{ color: "#64748b", fontSize: 13, textAlign: "center", marginBottom: 16 }}>{todayStr} 수령 현황</p>
-
-          {/* 통계 카드 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
             {[
               { label: "🟢 수령가능", value: 미수령수, color: "#10b981" },
@@ -271,8 +272,6 @@ export default function App() {
               </div>
             ))}
           </div>
-
-          {/* 미수령 회원 목록 */}
           <div style={s.card}>
             <p style={{ color: "#94a3b8", fontSize: 13, fontWeight: 700, margin: "0 0 12px" }}>🟢 수령 대기 회원</p>
             {data.filter(m => m.주문.some(o => o.상태 === "미수령")).length === 0 ? (
@@ -288,6 +287,38 @@ export default function App() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {connected && tab === "products" && (
+        <div style={{ width: "100%", maxWidth: 480 }}>
+          <p style={{ color: "#64748b", fontSize: 13, textAlign: "center", marginBottom: 16 }}>📦 상품별 미수령 회원</p>
+          {Object.keys(productMap).length === 0 ? (
+            <div style={{ ...s.card, textAlign: "center", padding: 40 }}>
+              <div style={{ fontSize: 40 }}>🎉</div>
+              <p style={{ color: "#10b981", fontWeight: 700, marginTop: 12 }}>모든 상품 수령 완료!</p>
+            </div>
+          ) : (
+            Object.entries(productMap).map(([제품명, entries], i) => (
+              <div key={i} style={s.card}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <p style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 800, margin: 0 }}>📦 {제품명}</p>
+                  <span style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 100, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>
+                    {entries.length}명 대기
+                  </span>
+                </div>
+                {entries.map(({ member, order }, j) => (
+                  <div key={j} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div>
+                      <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 600 }}>{member.이름}</span>
+                      <span style={{ color: "#64748b", fontSize: 12, marginLeft: 8 }}>뒷자리 {member.전화번호뒷자리}</span>
+                    </div>
+                    <span style={{ color: "#94a3b8", fontSize: 12 }}>{order.수량}개 · {order.수령일}</span>
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
