@@ -33,7 +33,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [tab, setTab] = useState<"search" | "dashboard">("search");
+  const [tab, setTab] = useState<"search" | "product">("search");
+  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
 
   const loadSheet = async () => {
     setLoading(true);
@@ -48,12 +49,12 @@ export default function App() {
         l.split("\t").map(v => v.replace(/^"|"$/g, "").trim())
       );
 
-      const nameRow = lines[1] || [];
-      const phoneRow = lines[2] || [];
-      const infoRow = lines[0] || [];
+      const nameRow = lines[2] || [];
+      const phoneRow = lines[3] || [];
+      const infoRow = lines[1] || [];
 
       const products: { 제품명: string; 수령일: string; 판매가: string; row: string[] }[] = [];
-      for (let r = 6; r < lines.length; r++) {
+      for (let r = 4; r < lines.length; r++) {
         const 제품명 = lines[r]?.[7] || "";
         if (!제품명) continue;
         products.push({
@@ -116,11 +117,25 @@ export default function App() {
     ));
   }, [query, data]);
 
-  const todayStr = new Date().toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
   const totalMembers = data.length;
-  const 수령완료수 = data.filter(m => m.주문.some(o => o.상태 === "수령완료")).length;
-  const 미수령수 = data.filter(m => m.주문.some(o => o.상태 === "미수령")).length;
-  const 미입고수 = data.filter(m => m.주문.every(o => o.상태 === "미입고")).length;
+
+  // 상품별 미수령 집계
+  const productList = Array.from(
+    new Set(data.flatMap(m => m.주문.map(o => o.제품명)))
+  );
+
+  const getProductStats = (제품명: string) => {
+    const 미수령회원 = data.filter(m =>
+      m.주문.some(o => o.제품명 === 제품명 && o.상태 === "미수령")
+    );
+    const 수령완료회원 = data.filter(m =>
+      m.주문.some(o => o.제품명 === 제품명 && o.상태 === "수령완료")
+    );
+    const 미입고회원 = data.filter(m =>
+      m.주문.some(o => o.제품명 === 제품명 && o.상태 === "미입고")
+    );
+    return { 미수령회원, 수령완료회원, 미입고회원 };
+  };
 
   const statusStyle = (상태: string): React.CSSProperties => {
     if (상태 === "수령완료") return { background: "rgba(239,68,68,0.15)", color: "#f87171", border: "1px solid rgba(239,68,68,0.3)" };
@@ -143,6 +158,7 @@ export default function App() {
 
   return (
     <div style={s.wrap}>
+      {/* 헤더 */}
       <div style={{ width: "100%", maxWidth: 480, textAlign: "center", padding: "40px 0 16px" }}>
         <h1 style={{ color: "#f1f5f9", fontSize: 28, fontWeight: 800, margin: 0 }}>🛍️ 공동구매 픽업 확인</h1>
         <p style={{ color: "#64748b", fontSize: 13, marginTop: 8 }}>
@@ -160,20 +176,22 @@ export default function App() {
         )}
       </div>
 
+      {/* 탭 */}
       {connected && (
         <div style={{ width: "100%", maxWidth: 480, display: "flex", gap: 8, marginBottom: 16 }}>
-          {(["search", "dashboard"] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
+          {(["search", "product"] as const).map(t => (
+            <button key={t} onClick={() => { setTab(t); setSelectedProduct(null); }} style={{
               flex: 1, padding: "12px", borderRadius: 14, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14,
               background: tab === t ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "rgba(255,255,255,0.05)",
               color: tab === t ? "#fff" : "#64748b",
             }}>
-              {t === "search" ? "🔍 회원 검색" : "📊 현황 대시보드"}
+              {t === "search" ? "🔍 회원 검색" : "📦 상품별 미수령"}
             </button>
           ))}
         </div>
       )}
 
+      {/* 연동 버튼 */}
       {!connected && (
         <div style={s.card}>
           <p style={{ color: "#94a3b8", fontSize: 13, margin: "0 0 12px" }}>구글 시트가 자동으로 연동돼요</p>
@@ -184,6 +202,7 @@ export default function App() {
         </div>
       )}
 
+      {/* 회원 검색 탭 */}
       {connected && tab === "search" && (
         <>
           {!result ? (
@@ -255,36 +274,124 @@ export default function App() {
         </>
       )}
 
-      {connected && tab === "dashboard" && (
+      {/* 상품별 미수령 탭 */}
+      {connected && tab === "product" && (
         <div style={{ width: "100%", maxWidth: 480 }}>
-          <p style={{ color: "#64748b", fontSize: 13, textAlign: "center", marginBottom: 16 }}>{todayStr} 수령 현황</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-            {[
-              { label: "🟢 수령가능", value: 미수령수, color: "#10b981" },
-              { label: "🔴 수령완료", value: 수령완료수, color: "#f87171" },
-              { label: "⚪ 미입고", value: 미입고수, color: "#94a3b8" },
-            ].map(({ label, value, color }) => (
-              <div key={label} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "16px 8px", textAlign: "center" }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color }}>{value}</div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>{label}</div>
+          {!selectedProduct ? (
+            // 상품 목록
+            <div style={s.card}>
+              <p style={{ color: "#94a3b8", fontSize: 13, fontWeight: 700, margin: "0 0 16px" }}>📦 상품을 선택하세요</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {productList.map((제품명, i) => {
+                  const { 미수령회원, 수령완료회원 } = getProductStats(제품명);
+                  const 전체 = 미수령회원.length + 수령완료회원.length;
+                  return (
+                    <button key={i} onClick={() => setSelectedProduct(제품명)} style={{
+                      background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 14, padding: "14px 16px", cursor: "pointer",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      textAlign: "left",
+                    }}>
+                      <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700 }}>{제품명}</span>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ background: "rgba(16,185,129,0.2)", color: "#10b981", borderRadius: 100, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>
+                          미수령 {미수령회원.length}
+                        </span>
+                        <span style={{ color: "#475569", fontSize: 12 }}>/ {전체}명</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-          <div style={s.card}>
-            <p style={{ color: "#94a3b8", fontSize: 13, fontWeight: 700, margin: "0 0 12px" }}>🟢 수령 대기 회원</p>
-            {data.filter(m => m.주문.some(o => o.상태 === "미수령")).length === 0 ? (
-              <p style={{ color: "#64748b", fontSize: 13, textAlign: "center" }}>모두 수령 완료!</p>
-            ) : (
-              data.filter(m => m.주문.some(o => o.상태 === "미수령")).map((m, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                  <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 600 }}>{m.이름}</span>
-                  <span style={{ color: "#64748b", fontSize: 12 }}>
-                    {m.주문.filter(o => o.상태 === "미수령").map(o => o.제품명).join(", ")}
-                  </span>
+            </div>
+          ) : (
+            // 선택된 상품의 미수령 고객 목록
+            (() => {
+              const { 미수령회원, 수령완료회원, 미입고회원 } = getProductStats(selectedProduct);
+              return (
+                <div>
+                  {/* 상품 헤더 */}
+                  <div style={{ ...s.card, marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 800 }}>{selectedProduct}</span>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <span style={{ background: "rgba(16,185,129,0.2)", color: "#10b981", borderRadius: 100, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>
+                          🟢 {미수령회원.length}
+                        </span>
+                        <span style={{ background: "rgba(239,68,68,0.2)", color: "#f87171", borderRadius: 100, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>
+                          🔴 {수령완료회원.length}
+                        </span>
+                        <span style={{ background: "rgba(148,163,184,0.15)", color: "#94a3b8", borderRadius: 100, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>
+                          ⚪ {미입고회원.length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 미수령 목록 */}
+                  {미수령회원.length > 0 && (
+                    <div style={s.card}>
+                      <p style={{ color: "#10b981", fontSize: 13, fontWeight: 700, margin: "0 0 12px" }}>🟢 수령 대기 ({미수령회원.length}명)</p>
+                      {미수령회원.map((m, i) => {
+                        const order = m.주문.find(o => o.제품명 === selectedProduct && o.상태 === "미수령");
+                        return (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div>
+                              <span style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 700 }}>{m.이름}</span>
+                              <span style={{ color: "#64748b", fontSize: 12, marginLeft: 8 }}>뒷자리 {m.전화번호뒷자리}</span>
+                            </div>
+                            <span style={{ color: "#a5b4fc", fontSize: 20, fontWeight: 800 }}>{order?.수량}개</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 수령완료 목록 */}
+                  {수령완료회원.length > 0 && (
+                    <div style={s.card}>
+                      <p style={{ color: "#f87171", fontSize: 13, fontWeight: 700, margin: "0 0 12px" }}>🔴 수령완료 ({수령완료회원.length}명)</p>
+                      {수령완료회원.map((m, i) => {
+                        const order = m.주문.find(o => o.제품명 === selectedProduct && o.상태 === "수령완료");
+                        return (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div>
+                              <span style={{ color: "#94a3b8", fontSize: 15, fontWeight: 700 }}>{m.이름}</span>
+                              <span style={{ color: "#475569", fontSize: 12, marginLeft: 8 }}>뒷자리 {m.전화번호뒷자리}</span>
+                            </div>
+                            <span style={{ color: "#64748b", fontSize: 20, fontWeight: 800 }}>{order?.수량}개</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 미입고 목록 */}
+                  {미입고회원.length > 0 && (
+                    <div style={s.card}>
+                      <p style={{ color: "#94a3b8", fontSize: 13, fontWeight: 700, margin: "0 0 12px" }}>⚪ 미입고 ({미입고회원.length}명)</p>
+                      {미입고회원.map((m, i) => {
+                        const order = m.주문.find(o => o.제품명 === selectedProduct && o.상태 === "미입고");
+                        return (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div>
+                              <span style={{ color: "#64748b", fontSize: 15, fontWeight: 700 }}>{m.이름}</span>
+                              <span style={{ color: "#475569", fontSize: 12, marginLeft: 8 }}>뒷자리 {m.전화번호뒷자리}</span>
+                            </div>
+                            <span style={{ color: "#64748b", fontSize: 20, fontWeight: 800 }}>{order?.수량}개</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <button onClick={() => setSelectedProduct(null)} style={{ ...s.btn, background: "rgba(255,255,255,0.06)", marginTop: 4 }}>
+                    ← 상품 목록으로
+                  </button>
                 </div>
-              ))
-            )}
-          </div>
+              );
+            })()
+          )}
         </div>
       )}
     </div>
