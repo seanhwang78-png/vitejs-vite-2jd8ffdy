@@ -33,7 +33,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [tab, setTab] = useState<"search" | "dashboard" | "products">("search");
+  const [tab, setTab] = useState<"search" | "dashboard">("search");
 
   const loadSheet = async () => {
     setLoading(true);
@@ -48,9 +48,9 @@ export default function App() {
         l.split("\t").map(v => v.replace(/^"|"$/g, "").trim())
       );
 
-      const infoRow = lines[0] || [];
       const nameRow = lines[1] || [];
       const phoneRow = lines[2] || [];
+      const infoRow = lines[0] || [];
 
       const products: { 제품명: string; 수령일: string; 판매가: string; row: string[] }[] = [];
       for (let r = 6; r < lines.length; r++) {
@@ -116,16 +116,6 @@ export default function App() {
     ));
   }, [query, data]);
 
-  const productMap: Record<string, { member: Member; order: Order }[]> = {};
-  for (const member of data) {
-    for (const order of member.주문) {
-      if (order.상태 === "미수령") {
-        if (!productMap[order.제품명]) productMap[order.제품명] = [];
-        productMap[order.제품명].push({ member, order });
-      }
-    }
-  }
-
   const todayStr = new Date().toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
   const totalMembers = data.length;
   const 수령완료수 = data.filter(m => m.주문.some(o => o.상태 === "수령완료")).length;
@@ -172,13 +162,13 @@ export default function App() {
 
       {connected && (
         <div style={{ width: "100%", maxWidth: 480, display: "flex", gap: 8, marginBottom: 16 }}>
-          {(["search", "dashboard", "products"] as const).map(t => (
+          {(["search", "dashboard"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
-              flex: 1, padding: "10px 4px", borderRadius: 14, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12,
+              flex: 1, padding: "12px", borderRadius: 14, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14,
               background: tab === t ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "rgba(255,255,255,0.05)",
               color: tab === t ? "#fff" : "#64748b",
             }}>
-              {t === "search" ? "🔍 회원검색" : t === "dashboard" ? "📊 현황" : "📦 상품별"}
+              {t === "search" ? "🔍 회원 검색" : "📊 현황 대시보드"}
             </button>
           ))}
         </div>
@@ -233,14 +223,22 @@ export default function App() {
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {member.주문.map((order, j) => (
-                        <div key={j} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 12, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <div style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700 }}>{order.제품명}</div>
-                            <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>
-                              {order.수량}개 · {order.판매가} · 수령일 {order.수령일}
+                        <div key={j} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 12, padding: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
+                              {order.제품명}
+                            </div>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 4 }}>
+                              <span style={{ color: "#a5b4fc", fontSize: 28, fontWeight: 800, lineHeight: 1 }}>
+                                {order.수량}
+                              </span>
+                              <span style={{ color: "#94a3b8", fontSize: 15, fontWeight: 600 }}>개</span>
+                            </div>
+                            <div style={{ color: "#64748b", fontSize: 12 }}>
+                              {order.판매가} · 수령일 {order.수령일}
                             </div>
                           </div>
-                          <span style={{ ...statusStyle(order.상태), borderRadius: 100, padding: "4px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" as const, marginLeft: 8 }}>
+                          <span style={{ ...statusStyle(order.상태), borderRadius: 100, padding: "6px 12px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" as const, marginLeft: 12 }}>
                             {statusLabel(order.상태)}
                           </span>
                         </div>
@@ -287,38 +285,6 @@ export default function App() {
               ))
             )}
           </div>
-        </div>
-      )}
-
-      {connected && tab === "products" && (
-        <div style={{ width: "100%", maxWidth: 480 }}>
-          <p style={{ color: "#64748b", fontSize: 13, textAlign: "center", marginBottom: 16 }}>📦 상품별 미수령 회원</p>
-          {Object.keys(productMap).length === 0 ? (
-            <div style={{ ...s.card, textAlign: "center", padding: 40 }}>
-              <div style={{ fontSize: 40 }}>🎉</div>
-              <p style={{ color: "#10b981", fontWeight: 700, marginTop: 12 }}>모든 상품 수령 완료!</p>
-            </div>
-          ) : (
-            Object.entries(productMap).map(([제품명, entries], i) => (
-              <div key={i} style={s.card}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <p style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 800, margin: 0 }}>📦 {제품명}</p>
-                  <span style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 100, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>
-                    {entries.length}명 대기
-                  </span>
-                </div>
-                {entries.map(({ member, order }, j) => (
-                  <div key={j} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                    <div>
-                      <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 600 }}>{member.이름}</span>
-                      <span style={{ color: "#64748b", fontSize: 12, marginLeft: 8 }}>뒷자리 {member.전화번호뒷자리}</span>
-                    </div>
-                    <span style={{ color: "#94a3b8", fontSize: 12 }}>{order.수량}개 · {order.수령일}</span>
-                  </div>
-                ))}
-              </div>
-            ))
-          )}
         </div>
       )}
     </div>
