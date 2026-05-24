@@ -49,9 +49,9 @@ export default function App() {
         l.split("\t").map(v => v.replace(/^"|"$/g, "").trim())
       );
 
-      const nameRow = lines[2] || [];
-      const phoneRow = lines[3] || [];
-      const infoRow = lines[1] || [];
+      const nameRow = lines[1] || [];
+      const phoneRow = lines[2] || [];
+      const infoRow = lines[0] || [];
 
       const products: { 제품명: string; 수령일: string; 판매가: string; row: string[] }[] = [];
       for (let r = 4; r < lines.length; r++) {
